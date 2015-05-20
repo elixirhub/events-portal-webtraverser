@@ -90,6 +90,9 @@ Inspections functions are executed in series, and are added that way:
 myWebtraverser.functions.push(myFunction);
 ```
 
+The parameters passed to your functions are `(fromUrlo, currentUrlo,
+htmlReceived, statusCode, callback)`.
+
 ### Events
 
 
