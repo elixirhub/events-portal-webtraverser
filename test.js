@@ -14,7 +14,7 @@ mongo.set(
   '127.0.0.1',
   27017,
   'webtraverser',
-  ['links', 'queue'],
+  ['links', 'queue', 'events'],
 function (err, mon) {
   if (err) {
     console.error(err);
@@ -39,25 +39,34 @@ var urlsStart = [
 var webtraverser = new Webtraverser({
   "urlStart": urlsStart,
   "mongoId": 'webtraverser',
-  "maxConcurrent": 3,
+  "maxConcurrent": 6,
   "checkHostname": true
 });
 
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
-var eventFound = false;
-var events = [];
 
-webtraverser.functions.push(function (fromUrlo, currentUrlo,
+webtraverser.functions.push(function (self, fromUrlo, currentUrlo,
 htmlReceived, statusCode, callback) {
-  var result = microdata.parse(htmlReceived);
-  if (result[0]) {
-    eventFound = true;
-    events.push(result);
-    console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-    console.log(result);
-    console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+  var results = microdata.parse(htmlReceived);
+
+  if (!results || !results.length) return callback();
+
+  for (var i = 0, c = 0; i < results.length; i++) {
+    (function (i) {
+      if (/event/i.test(results[i].itemtype)) {
+        mongo.get('webtraverser', function (err, mon) {
+          if (err) return self.emit('error', err, fromUrlo, currentUrlo);
+          mon.events.insert(results[i], function (err, result) {
+            if (err) return self.emit('error', err, fromUrlo, currentUrlo);
+            console.log('An event as been found.')
+            if (++c === results.length) callback();
+          });
+        });
+      } else
+        if (++c === results.length) callback();
+    })(i);
   }
-  callback();
+
 });
 
 webtraverser.on('error', function (err, fromUrlo, currentUrlo) {
@@ -98,10 +107,3 @@ webtraverser.removeCollections(function () {
   webtraverser.start();
   webtraverser.interval({"ms": 1000});
 });
-
-setInterval(function () {
-  if (eventFound) {
-    console.log('Events found:');
-    console.log(events);
-  }
-}, 10000);
